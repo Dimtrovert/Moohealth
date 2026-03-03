@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiTernak - Smart Monitoring</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* --- BACKGROUND SETTINGS --- */
+        body { 
+            display: flex; 
+            min-height: 100vh; 
+            margin: 0;
+            position: relative; /* Needed for the pseudo-element */
+            color: #333; /* Default text color for better readability */
+        }
+
+        /* The background image layer with blur */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url('/static/images/SAPI.jpg') no-repeat center center;
+            background-size: cover;
+            filter: blur(8px); /* Adjust blur intensity here */
+            z-index: -2; /* Push it to the very back */
+        }
+
+        /* Remove the white shadow overlay */
+        body::after {
+            display: none !important;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 250px;
+            background-color: rgba(44, 62, 80, 0.9); /* Slightly transparent */
+            color: white;
+            display: flex;
+            flex-direction: column;
+            transition: 0.3s;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px); /* Add blur to sidebar itself if desired */
+        }
+        .sidebar-header {
+            padding: 20px;
+            text-align: center;
+            background-color: rgba(26, 37, 47, 0.8);
+            border-bottom: 1px solid rgba(52, 73, 94, 0.5);
+        }
+        .sidebar-header h2 { font-size: 1.2rem; }
+        .sidebar-header p { font-size: 0.8rem; color: #ddd; }
+        
+        .nav-links { flex-grow: 1; padding-top: 20px; }
+        .nav-links a {
+            display: flex; align-items: center; padding: 15px 25px;
+            color: #bdc3c7; text-decoration: none; transition: 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            background-color: rgba(52, 152, 219, 0.8); color: white;
+        }
+        .nav-links a i { margin-right: 15px; width: 20px; text-align: center; }
+        
+        .logout-btn {
+            background-color: rgba(231, 76, 60, 0.9); color: white; text-align: center;
+            padding: 15px; text-decoration: none; display: block;
+        }
+        .logout-btn:hover { background-color: rgba(192, 57, 43, 1); }
+
+        /* --- MAIN CONTENT --- */
+        .main-content {
+            flex-grow: 1; padding: 30px; overflow-y: auto;
+        }
+        .header-title { text-align: center; margin-bottom: 30px; }
+        .header-title h1 { font-size: 1.8rem; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }
+        .header-title p { font-size: 0.9rem; font-weight: 500; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }
+
+        /* WIDGET GRID */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px; margin-bottom: 30px;
+        }
+        .widget {
+            background: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
+            border-radius: 10px; padding: 20px;
+            text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(5px);
+        }
+        .widget-title {
+            font-size: 0.85rem; color: #555; font-weight: bold;
+            text-transform: uppercase; margin-bottom: 15px;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        .widget-value { font-size: 2rem; font-weight: bold; color: #2c3e50; }
+        
+        .w-suhu .widget-value { color: #3498db; }
+        .w-jantung .widget-value { color: #e74c3c; }
+        
+        /* STATUS BAR */
+        .status-bar {
+            background-color: rgba(212, 237, 218, 0.9); color: #155724;
+            padding: 15px; border-radius: 10px; text-align: center;
+            font-weight: bold; font-size: 1.2rem; margin-bottom: 30px;
+            border: 1px solid rgba(195, 230, 203, 0.5); transition: 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        .status-bar.warning { background-color: rgba(255, 243, 205, 0.9); color: #856404; border-color: rgba(255, 238, 186, 0.5); }
+        .status-bar.danger { background-color: rgba(248, 215, 218, 0.9); color: #721c24; border-color: rgba(245, 198, 203, 0.5); }
+
+        /* MODAL DOWNLOAD */
+        .modal {
+            display: none; position: fixed; z-index: 10; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 10px;
+            text-align: center; max-width: 400px; width: 90%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .modal h3 { margin-bottom: 15px; color: #333; }
+        .modal p { margin-bottom: 20px; color: #666; font-size: 0.9rem; }
+        .btn-group { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;}
+        .btn {
+            padding: 5px 15px; /* Reduce padding to make buttons shorter */
+            border-radius: 5px;
+            cursor: pointer; font-weight: bold; color: white;
+        }
+        .btn-blue { background: #3498db; }
+        .btn-gray { background: #95a5a6; }
+        .btn-link { background: none; color: #e74c3c; text-decoration: underline; padding: 0; }
+
+        /* CHART CONTAINER */
+        .chart-section {
+            background: rgba(255, 255, 255, 0.85); padding: 20px; border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .chart-section canvas { width: 100% !important;
+            height: 500px !important; /* Increase height for a more square-like aspect ratio */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>MooHealth</h2>
+            <p>Kesehatan Sapi</p>
+        </div>
+        <div class="nav-links">
+            <a href="#" class="active"><i class="fas fa-th-large"></i> Dashboard</a>
+            <a href="#" onclick="openModal()"><i class="fas fa-file-csv"></i> Download CSV</a>
+        </div>
+        <div style="flex-grow: 1;"></div> 
+        <a href="#" class="logout-btn" onclick="confirmLogout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+
+    <div class="main-content">
+        <div class="header-title">
+            <h1>MooHealth</h1>
+            <p>Pantau kesehatan sapi secara realtime</p>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="widget w-suhu">
+                <div class="widget-title"><i class="fas fa-thermometer-half"></i> SUHU TUBUH</div>
+                <div class="widget-value" id="val-suhu">-- °C</div>
+            </div>
+            <div class="widget w-jantung">
+                <div class="widget-title"><i class="fas fa-heartbeat"></i> DETAK JANTUNG</div>
+                <div class="widget-value" id="val-jantung">-- BPM</div>
+            </div>
+        </div>
+
+        <div id="status-bar" class="status-bar">
+            <i class="fas fa-notes-medical"></i> STATUS KESEHATAN: <span id="val-status">MENUNGGU DATA...</span>
+        </div>
+
+        <div id="grafik" class="chart-row">
+            <div class="chart-section">
+                <h3 style="margin-bottom: 20px; color: #333;"><i class="fas fa-chart-area"></i> Grafik Suhu Tubuh</h3>
+                <canvas id="historyChartSuhu"></canvas>
+            </div>
+            <div class="chart-section">
+                <h3 style="margin-bottom: 20px; color: #333;"><i class="fas fa-chart-line"></i> Grafik Detak Jantung</h3>
+                <canvas id="historyChartBpm"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="downloadModal" class="modal">
+        <div class="modal-content">
+            <div style="text-align: right;"><button onclick="closeModal()" style="border:none; background:none; font-size:1.2rem; cursor:pointer;">&times;</button></div>
+            <h3>Download Data</h3>
+            <p>Pilih jumlah data yang ingin diunduh:</p>
+            <div class="btn-group">
+                <button class="btn btn-blue" onclick="downloadCSV(1000)"><i class="fas fa-download"></i> 1000 Terakhir</button>
+                <button class="btn btn-blue" onclick="downloadCSV(5000)"><i class="fas fa-download"></i> 5000 Terakhir</button>
+                <button class="btn btn-gray" onclick="closeModal()">Batal</button>
+            </div>
+            <button class="btn btn-link" onclick="downloadCSV(0)"><i class="fas fa-database"></i> Download SEMUA Data Database</button>
+        </div>
+    </div>
+
+    <script>
+        // Setup Chart.js
+        const ctxSuhu = document.getElementById('historyChartSuhu').getContext('2d');
+        let historyChartSuhu = new Chart(ctxSuhu, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Suhu Tubuh (°C)',
+                    data: [],
+                    borderColor: '#3498db',
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                maintainAspectRatio: false,
+                scales: { y: { min: 35, max: 42 } }
+            }
+        });
+
+        const ctxBpm = document.getElementById('historyChartBpm').getContext('2d');
+        let historyChartBpm = new Chart(ctxBpm, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Detak Jantung (BPM)',
+                    data: [],
+                    borderColor: '#e74c3c',
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: false,
+                maintainAspectRatio: false,
+                scales: { y: { min: 40, max: 140 } }
+            }
+        });
+
+        // Function to Fetch Data
+        async function fetchCowData() {
+            try {
+                const res = await fetch('/api/cow-data');
+                const data = await res.json();
+                
+                document.getElementById('val-suhu').innerText = data.suhu + ' °C';
+                document.getElementById('val-jantung').innerText = data.jantung_bpm + ' BPM';
+
+                const statusEl = document.getElementById('status-bar');
+                const statusText = document.getElementById('val-status');
+                statusText.innerText = data.status;
+
+                if (data.status.includes('PERHATIAN')) {
+                    statusEl.className = 'status-bar warning';
+                } else if (data.status.includes('BAHAYA')) {
+                    statusEl.className = 'status-bar danger';
+                } else {
+                    statusEl.className = 'status-bar';
+                }
+
+                const resHist = await fetch('/api/history');
+                const histData = await resHist.json();
+                
+                const labels = histData.map(d => d.timestamp);
+                const suhuData = histData.map(d => d.suhu);
+                const bpmData  = histData.map(d => d.jantung_bpm);
+
+                historyChartSuhu.data.labels = labels;
+                historyChartSuhu.data.datasets[0].data = suhuData;
+                historyChartSuhu.update();
+
+                historyChartBpm.data.labels = labels;
+                historyChartBpm.data.datasets[0].data = bpmData;
+                historyChartBpm.update();
+
+            } catch (error) {
+                console.error("Gagal mengambil data:", error);
+                document.getElementById('val-status').innerText = "KONEKSI TERPUTUS";
+                document.getElementById('status-bar').className = 'status-bar warning';
+            }
+        }
+
+        setInterval(fetchCowData, 2000);
+        fetchCowData(); 
+
+        // --- Modal Logic ---
+        function openModal() { document.getElementById('downloadModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('downloadModal').style.display = 'none'; }
+        
+        function downloadCSV(limit) {
+            window.location.href = `/api/download-csv?limit=${limit}`;
+            closeModal();
+        }
+
+        window.onclick = function(event) {
+            let modal = document.getElementById('downloadModal');
+            if (event.target == modal) { modal.style.display = "none"; }
+        }
+
+        function confirmLogout() {
+            if (confirm("Apakah Anda yakin ingin logout?")) {
+                window.location.href = "/logout"; // Redirect to logout route
+            }
+        }
+    </script>
+</body>
+</html>
